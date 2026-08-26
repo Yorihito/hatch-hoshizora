@@ -76,20 +76,13 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
       { az: 180, label: '南' },
       { az: 270, label: '西' },
     ];
-    ctx.font = '14px sans-serif';
-    ctx.fillStyle = '#557';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const d of dirs) {
+      // 目盛り線
       const pos = toCanvas(d.az, 0, cx, cy, r);
       if (pos) {
         const [x, y] = pos;
-        // 地平線上のラベル
-        const ix = cx + (r + 14) * Math.sin((d.az * Math.PI) / 180);
-        const iy = cy - (r + 14) * Math.cos((d.az * Math.PI) / 180);
-        ctx.fillStyle = '#88aacc';
-        ctx.fillText(d.label, ix, iy);
-        // 目盛り線
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.lineTo(x, y);
@@ -323,6 +316,18 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
     }
 
     ctx.restore();
+
+    // 方位ラベル (円の外側、クリップ解除後に描画)
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e0c060';
+    for (const d of dirs) {
+      const azR = (d.az * Math.PI) / 180;
+      const ix = cx + (r + 20) * Math.sin(azR);
+      const iy = cy - (r + 20) * Math.cos(azR);
+      ctx.fillText(d.label, ix, iy);
+    }
 
     // 地平線ラベル
     ctx.font = '12px sans-serif';
