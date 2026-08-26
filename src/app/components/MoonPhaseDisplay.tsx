@@ -28,24 +28,51 @@ export default function MoonPhaseDisplay({ phase, illumination, phaseName }: Pro
   if (phase < 0.03 || phase > 0.97) {
     // 新月 (暗い円)
     svgContent = `<circle cx="${cx}" cy="${cy}" r="${mr}" fill="#222" stroke="#555" stroke-width="1"/>`;
-  } else if (phase > 0.47 && phase < 0.53) {
+  } else if (phase >= 0.47 && phase <= 0.53) {
     // 満月
     svgContent = `<circle cx="${cx}" cy="${cy}" r="${mr}" fill="#ddd8b8" stroke="#aaa" stroke-width="1"/>`;
   } else {
     // 半月〜三日月など
-    const wax = phase < 0.5; // 満ちていく
-    const t = wax ? phase * 2 : (phase - 0.5) * 2;
-    const xOffset = mr * Math.cos(Math.PI * (1 - t));
+    // cosEl: +1=新月, 0=上弦/下弦, -1=満月
+    const cosEl = Math.cos(phase * 2 * Math.PI);
+    const waxing = phase < 0.5;
 
-    const rightArc = `M ${cx} ${cy - mr} A ${mr} ${mr} 0 0 1 ${cx} ${cy + mr}`;
-    const innerArc = wax
-      ? `A ${Math.abs(xOffset)} ${mr} 0 0 0 ${cx} ${cy - mr}`
-      : `A ${Math.abs(xOffset)} ${mr} 0 0 1 ${cx} ${cy - mr}`;
-
-    svgContent = `
-      <circle cx="${cx}" cy="${cy}" r="${mr}" fill="#222" stroke="#444" stroke-width="1"/>
-      <path d="${rightArc} ${innerArc}" fill="#ddd8b8"/>
-    `;
+    if (waxing) {
+      // 右半円が明るい
+      // 内側の楕円幅: cosEl が 1→0 のとき右側が細く, 0→-1 のとき満月へ
+      const ellipseRx = Math.abs(cosEl) * mr;
+      if (cosEl > 0.01) {
+        // 三日月〜上弦: 右半円から暗い楕円を引く
+        svgContent = `
+          <circle cx="${cx}" cy="${cy}" r="${mr}" fill="#222" stroke="#444" stroke-width="1"/>
+          <path d="M ${cx} ${cy - mr} A ${mr} ${mr} 0 0 1 ${cx} ${cy + mr} A ${ellipseRx} ${mr} 0 0 0 ${cx} ${cy - mr}" fill="#ddd8b8"/>
+        `;
+      } else {
+        // 上弦〜満月直前: 右半円 + 左側に明るい楕円
+        svgContent = `
+          <circle cx="${cx}" cy="${cy}" r="${mr}" fill="#222" stroke="#444" stroke-width="1"/>
+          <path d="M ${cx} ${cy - mr} A ${mr} ${mr} 0 0 1 ${cx} ${cy + mr} A ${mr} ${mr} 0 0 1 ${cx} ${cy - mr}" fill="#ddd8b8"/>
+          <path d="M ${cx} ${cy - mr} A ${ellipseRx} ${mr} 0 0 0 ${cx} ${cy + mr} A ${mr} ${mr} 0 0 0 ${cx} ${cy - mr}" fill="#ddd8b8"/>
+        `;
+      }
+    } else {
+      // 左半円が明るい
+      const ellipseRx = Math.abs(cosEl) * mr;
+      if (cosEl < -0.01) {
+        // 満月直後〜下弦: 左半円 + 右側に明るい楕円
+        svgContent = `
+          <circle cx="${cx}" cy="${cy}" r="${mr}" fill="#222" stroke="#444" stroke-width="1"/>
+          <path d="M ${cx} ${cy - mr} A ${mr} ${mr} 0 0 0 ${cx} ${cy + mr} A ${mr} ${mr} 0 0 0 ${cx} ${cy - mr}" fill="#ddd8b8"/>
+          <path d="M ${cx} ${cy - mr} A ${ellipseRx} ${mr} 0 0 1 ${cx} ${cy + mr} A ${mr} ${mr} 0 0 1 ${cx} ${cy - mr}" fill="#ddd8b8"/>
+        `;
+      } else {
+        // 下弦〜有明月: 左半円から暗い楕円を引く
+        svgContent = `
+          <circle cx="${cx}" cy="${cy}" r="${mr}" fill="#222" stroke="#444" stroke-width="1"/>
+          <path d="M ${cx} ${cy - mr} A ${mr} ${mr} 0 0 0 ${cx} ${cy + mr} A ${ellipseRx} ${mr} 0 0 1 ${cx} ${cy - mr}" fill="#ddd8b8"/>
+        `;
+      }
+    }
   }
 
   return (
