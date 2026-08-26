@@ -1,0 +1,307 @@
+'use client';
+
+import { useEffect, useRef, useCallback } from 'react';
+import {
+  julianDay,
+  localSiderealTime,
+  equatorialToHorizontal,
+  moonInfo,
+  sunInfo,
+  planetElements,
+  STARS,
+  CONSTELLATIONS,
+} from '../lib/astronomy';
+
+interface Props {
+  lat: number;
+  lon: number;
+  date: Date;
+  showConstellations: boolean;
+  showPlanets: boolean;
+  showMoon: boolean;
+  showLabels: boolean;
+}
+
+// 方位角・高度 → キャンバス座標 (ステレオ投影)
+function toCanvas(az: number, alt: number, cx: number, cy: number, r: number): [number, number] | null {
+  if (alt < 0) return null; // 地平線以下
+  const rho = r * (1 - alt / 90); // 天頂から外側へ
+  const azR = ((az - 180) * Math.PI) / 180; // 北が上
+  const x = cx + rho * Math.sin(azR);
+  const y = cy - rho * Math.cos(azR);
+  return [x, y];
+}
+
+function magToRadius(mag: number): number {
+  // 等級 → 半径 (明るいほど大きい)
+  return Math.max(0.5, 4.5 - mag * 0.8);
+}
+
+export default function StarMap({ lat, lon, date, showConstellations, showPlanets, showMoon, showLabels }: Props) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const r = Math.min(W, H) / 2 - 20;
+
+    // 背景
+    ctx.fillStyle = '#000d1a';
+    ctx.fillRect(0, 0, W, H);
+
+    // 天球ドーム (円)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = '#334';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.clip();
+
+    const jd = julianDay(date);
+    const lst = localSiderealTime(jd, lon);
+
+    // 方位目盛り
+    const dirs = [
+      { az: 0, label: '北' },
+      { az: 90, label: '東' },
+      { az: 180, label: '南' },
+      { az: 270, label: '西' },
+    ];
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#557';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const d of dirs) {
+      const pos = toCanvas(d.az, 0, cx, cy, r);
+      if (pos) {
+        const [x, y] = pos;
+        // 地平線上のラベル
+        const ix = cx + (r + 14) * Math.sin(((d.az - 180) * Math.PI) / 180);
+        const iy = cy - (r + 14) * Math.cos(((d.az - 180) * Math.PI) / 180);
+        ctx.fillStyle = '#88aacc';
+        ctx.fillText(d.label, ix, iy);
+        // 目盛り線
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = '#1a2535';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    // 高度サークル (30, 60 度)
+    for (const alt of [30, 60]) {
+      const pr = r * (1 - alt / 90);
+      ctx.beginPath();
+      ctx.arc(cx, cy, pr, 0, Math.PI * 2);
+      ctx.strokeStyle = '#1a2535';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // 星座線
+    if (showConstellations) {
+      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = 'rgba(80,140,255,0.35)';
+      for (const cons of CONSTELLATIONS) {
+        for (const [i, j] of cons.lines) {
+          if (i < 0 || j < 0) continue;
+          const a = cons.stars[i];
+          const b = cons.stars[j];
+          const ha = equatorialToHorizontal({ ra: a.ra, dec: a.dec }, lat, lst);
+          const hb = equatorialToHorizontal({ ra: b.ra, dec: b.dec }, lat, lst);
+          const pa = toCanvas(ha.az, ha.alt, cx, cy, r);
+          const pb = toCanvas(hb.az, hb.alt, cx, cy, r);
+          if (pa && pb) {
+            ctx.beginPath();
+            ctx.moveTo(pa[0], pa[1]);
+            ctx.lineTo(pb[0], pb[1]);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // 星座名ラベル
+      if (showLabels) {
+        ctx.font = '11px sans-serif';
+        ctx.fillStyle = 'rgba(80,140,255,0.6)';
+        ctx.textAlign = 'center';
+        for (const cons of CONSTELLATIONS) {
+          // 中心を星の平均位置で求める
+          let sumAz = 0, sumAlt = 0, cnt = 0;
+          const seen = new Set<number>();
+          for (const [i, j] of cons.lines) {
+            for (const idx of [i, j]) {
+              if (idx < 0 || seen.has(idx)) continue;
+              seen.add(idx);
+              const s = cons.stars[idx];
+              const h = equatorialToHorizontal({ ra: s.ra, dec: s.dec }, lat, lst);
+              if (h.alt > 0) { sumAz += h.az; sumAlt += h.alt; cnt++; }
+            }
+          }
+          if (cnt > 0) {
+            const p = toCanvas(sumAz / cnt, sumAlt / cnt, cx, cy, r);
+            if (p) ctx.fillText(cons.nameJa, p[0], p[1] - 8);
+          }
+        }
+      }
+    }
+
+    // 恒星
+    for (const star of STARS) {
+      if (star.mag > 4.5) continue;
+      const h = equatorialToHorizontal({ ra: star.ra, dec: star.dec }, lat, lst);
+      const pos = toCanvas(h.az, h.alt, cx, cy, r);
+      if (!pos) continue;
+      const [x, y] = pos;
+      const sr = magToRadius(star.mag);
+
+      // グロー
+      if (star.mag < 1.5) {
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, sr * 3);
+        grad.addColorStop(0, 'rgba(255,255,255,0.6)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.beginPath();
+        ctx.arc(x, y, sr * 3, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(x, y, sr, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      if (showLabels && star.nameJa && star.mag < 1.5) {
+        ctx.font = '10px sans-serif';
+        ctx.fillStyle = 'rgba(200,220,255,0.8)';
+        ctx.textAlign = 'left';
+        ctx.fillText(star.nameJa, x + sr + 2, y - 2);
+      }
+    }
+
+    // 惑星
+    if (showPlanets) {
+      const planets = planetElements(jd);
+      for (const p of planets) {
+        const h = equatorialToHorizontal({ ra: p.ra, dec: p.dec }, lat, lst);
+        const pos = toCanvas(h.az, h.alt, cx, cy, r);
+        if (!pos) continue;
+        const [x, y] = pos;
+        const sr = magToRadius(p.mag) + 1;
+
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, sr * 2.5);
+        grad.addColorStop(0, p.color);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.beginPath();
+        ctx.arc(x, y, sr * 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(x, y, sr, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+
+        if (showLabels) {
+          ctx.font = '10px sans-serif';
+          ctx.fillStyle = p.color;
+          ctx.textAlign = 'left';
+          ctx.fillText(p.nameJa, x + sr + 2, y - 2);
+        }
+      }
+    }
+
+    // 月
+    if (showMoon) {
+      const moon = moonInfo(jd);
+      const h = equatorialToHorizontal({ ra: moon.ra, dec: moon.dec }, lat, lst);
+      const pos = toCanvas(h.az, h.alt, cx, cy, r);
+      if (pos) {
+        const [x, y] = pos;
+        const mr = 9;
+
+        // グロー
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, mr * 3);
+        grad.addColorStop(0, 'rgba(200,200,180,0.5)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.beginPath();
+        ctx.arc(x, y, mr * 3, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // 月の本体
+        ctx.beginPath();
+        ctx.arc(x, y, mr, 0, Math.PI * 2);
+        ctx.fillStyle = '#ddd8b8';
+        ctx.fill();
+
+        // 月の欠け (簡易)
+        const phase = moon.phase;
+        if (phase < 0.48 || phase > 0.52) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(x, y, mr, 0, Math.PI * 2);
+          ctx.clip();
+          // 暗い部分
+          ctx.beginPath();
+          const dark = phase < 0.5;
+          const xOffset = mr * Math.cos(Math.PI * (phase < 0.5 ? 1 - phase * 2 : (phase - 0.5) * 2));
+          ctx.ellipse(x + (dark ? xOffset : -xOffset), y, Math.abs(xOffset), mr, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#111';
+          ctx.fill();
+          ctx.restore();
+        }
+
+        if (showLabels) {
+          ctx.font = '10px sans-serif';
+          ctx.fillStyle = '#ddd8b8';
+          ctx.textAlign = 'left';
+          ctx.fillText(`月 (${moon.phaseName})`, x + mr + 2, y - 2);
+        }
+      }
+    }
+
+    ctx.restore();
+
+    // 地平線ラベル
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#334';
+    ctx.textAlign = 'center';
+    ctx.fillText('地平線', cx, cy + r + 14);
+  }, [lat, lon, date, showConstellations, showPlanets, showMoon, showLabels]);
+
+  useEffect(() => {
+    draw();
+  }, [draw]);
+
+  // HiDPI 対応
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const size = Math.min(window.innerWidth, 700);
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.scale(dpr, dpr);
+    draw();
+  }, [draw]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ display: 'block', margin: '0 auto', borderRadius: '50%', cursor: 'default' }}
+    />
+  );
+}
