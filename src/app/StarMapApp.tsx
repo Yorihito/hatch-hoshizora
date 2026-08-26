@@ -204,10 +204,10 @@ export default function StarMapApp() {
       }}>
         <div style={{ color: '#8ab', marginBottom: 6 }}>使い方</div>
         <ul style={{ margin: 0, paddingLeft: 16, lineHeight: 1.8 }}>
-          <li>円の中心が天頂（真上）、円周が地平線です</li>
-          <li>北が上、東が右になるように描かれています</li>
+          <li>円の中心が天頂（真上）、円周が地平線です（地平線から天頂まで表示）</li>
+          <li>北が上・南が下・東が右・西が左（上から空を見下ろすイメージ）</li>
           <li>星の大きさは明るさを表します（大きいほど明るい）</li>
-          <li>青い線が星座の結線です</li>
+          <li>青い線は星座の結線です</li>
         </ul>
       </div>
     </div>

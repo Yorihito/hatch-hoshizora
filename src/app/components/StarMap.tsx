@@ -23,10 +23,11 @@ interface Props {
 }
 
 // 方位角・高度 → キャンバス座標 (ステレオ投影)
+// 北が上、東が右 (上空から見下ろす向き)
 function toCanvas(az: number, alt: number, cx: number, cy: number, r: number): [number, number] | null {
   if (alt < 0) return null; // 地平線以下
   const rho = r * (1 - alt / 90); // 天頂から外側へ
-  const azR = ((az - 180) * Math.PI) / 180; // 北が上
+  const azR = (az * Math.PI) / 180;
   const x = cx + rho * Math.sin(azR);
   const y = cy - rho * Math.cos(azR);
   return [x, y];
@@ -46,8 +47,8 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const W = canvas.width;
-    const H = canvas.height;
+    const W = canvas.clientWidth || canvas.width;
+    const H = canvas.clientHeight || canvas.height;
     const cx = W / 2;
     const cy = H / 2;
     const r = Math.min(W, H) / 2 - 20;
@@ -84,8 +85,8 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
       if (pos) {
         const [x, y] = pos;
         // 地平線上のラベル
-        const ix = cx + (r + 14) * Math.sin(((d.az - 180) * Math.PI) / 180);
-        const iy = cy - (r + 14) * Math.cos(((d.az - 180) * Math.PI) / 180);
+        const ix = cx + (r + 14) * Math.sin((d.az * Math.PI) / 180);
+        const iy = cy - (r + 14) * Math.cos((d.az * Math.PI) / 180);
         ctx.fillStyle = '#88aacc';
         ctx.fillText(d.label, ix, iy);
         // 目盛り線
@@ -244,20 +245,71 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
         ctx.fillStyle = '#ddd8b8';
         ctx.fill();
 
-        // 月の欠け (簡易)
+        // 月の欠け (正しいアルゴリズム)
+        // phase: 0=新月, 0.5=満月, 1=新月
         const phase = moon.phase;
-        if (phase < 0.48 || phase > 0.52) {
+        if (phase < 0.02 || phase > 0.98) {
+          // 新月: 暗い
+          ctx.beginPath();
+          ctx.arc(x, y, mr, 0, Math.PI * 2);
+          ctx.fillStyle = '#222';
+          ctx.fill();
+        } else if (phase >= 0.02 && phase <= 0.98) {
           ctx.save();
           ctx.beginPath();
           ctx.arc(x, y, mr, 0, Math.PI * 2);
           ctx.clip();
-          // 暗い部分
-          ctx.beginPath();
-          const dark = phase < 0.5;
-          const xOffset = mr * Math.cos(Math.PI * (phase < 0.5 ? 1 - phase * 2 : (phase - 0.5) * 2));
-          ctx.ellipse(x + (dark ? xOffset : -xOffset), y, Math.abs(xOffset), mr, 0, 0, Math.PI * 2);
+
+          // 暗い背景
           ctx.fillStyle = '#111';
-          ctx.fill();
+          ctx.fillRect(x - mr, y - mr, mr * 2, mr * 2);
+
+          const waxing = phase <= 0.5;
+          // cos(elongation): +1=新月, 0=上弦/下弦, -1=満月
+          const cosEl = Math.cos(phase * 2 * Math.PI);
+
+          ctx.fillStyle = '#ddd8b8';
+          if (waxing) {
+            // 右半円を明るく
+            ctx.beginPath();
+            ctx.arc(x, y, mr, -Math.PI / 2, Math.PI / 2);
+            ctx.closePath();
+            ctx.fill();
+            if (cosEl > 0.01) {
+              // 右半分に暗い楕円を重ねて三日月に
+              ctx.fillStyle = '#111';
+              ctx.beginPath();
+              ctx.ellipse(x, y, cosEl * mr, mr, 0, -Math.PI / 2, Math.PI / 2);
+              ctx.closePath();
+              ctx.fill();
+            } else if (cosEl < -0.01) {
+              // 左半分にも明るい楕円を追加 (十三夜月など)
+              ctx.beginPath();
+              ctx.ellipse(x, y, -cosEl * mr, mr, 0, Math.PI / 2, 3 * Math.PI / 2);
+              ctx.closePath();
+              ctx.fill();
+            }
+          } else {
+            // 左半円を明るく
+            ctx.beginPath();
+            ctx.arc(x, y, mr, Math.PI / 2, 3 * Math.PI / 2);
+            ctx.closePath();
+            ctx.fill();
+            if (cosEl < -0.01) {
+              // 右半分にも明るい楕円を追加
+              ctx.beginPath();
+              ctx.ellipse(x, y, -cosEl * mr, mr, 0, -Math.PI / 2, Math.PI / 2);
+              ctx.closePath();
+              ctx.fill();
+            } else if (cosEl > 0.01) {
+              // 左半分に暗い楕円を重ねて有明月に
+              ctx.fillStyle = '#111';
+              ctx.beginPath();
+              ctx.ellipse(x, y, cosEl * mr, mr, 0, Math.PI / 2, 3 * Math.PI / 2);
+              ctx.closePath();
+              ctx.fill();
+            }
+          }
           ctx.restore();
         }
 
@@ -283,12 +335,12 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
     draw();
   }, [draw]);
 
-  // HiDPI 対応
+  // キャンバスサイズ初期化 (マウント時のみ)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
-    const size = Math.min(window.innerWidth, 700);
+    const size = Math.min(window.innerWidth, window.innerHeight, 700);
     canvas.style.width = size + 'px';
     canvas.style.height = size + 'px';
     canvas.width = size * dpr;
@@ -296,7 +348,8 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
     const ctx = canvas.getContext('2d');
     if (ctx) ctx.scale(dpr, dpr);
     draw();
-  }, [draw]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // マウント時のみ実行 (チェックボックス変更で縮まないよう)
 
   return (
     <canvas
