@@ -11,7 +11,15 @@
 - 📍 **場所指定** — 主要都市プリセット / 緯度経度入力 / GPS 現在地取得
 - 📅 **日時指定** — 任意の日時を指定してシミュレーション
 
-## 動かす
+## 公開 URL
+
+main ブランチへの push 時に GitHub Actions が自動ビルド・デプロイします。
+
+👉 https://yorihito.github.io/hatch-hoshizora/
+
+> 初回は GitHub リポジトリの **Settings → Pages → Source** を **GitHub Actions** に設定してください。
+
+## ローカルで動かす
 
 ```bash
 npm install
@@ -25,6 +33,7 @@ http://localhost:3000 で開きます。
 - Next.js 15 (App Router) + TypeScript
 - Canvas API による星空描画
 - 外部ライブラリなし（天文計算はすべてゼロから実装）
+- GitHub Actions + GitHub Pages で自動デプロイ
 
 ---
 
