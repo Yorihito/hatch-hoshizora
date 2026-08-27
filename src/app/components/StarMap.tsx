@@ -52,6 +52,47 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
     const cx = W / 2;
     const cy = H / 2;
     const r = Math.min(W, H) / 2 - 20;
+    const canvasPadding = 8;
+    const occupiedLabelRects: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const pendingObjectLabels: Array<{ text: string; x: number; y: number; color: string }> = [];
+
+    const overlaps = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) =>
+      a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+    const placeObjectLabel = (text: string, anchorX: number, anchorY: number, color: string) => {
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = color;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      const metrics = ctx.measureText(text);
+      const textW = metrics.width;
+      const textH = Math.ceil((metrics.actualBoundingBoxAscent || 7) + (metrics.actualBoundingBoxDescent || 3));
+
+      const candidates = [
+        [8, -textH - 2],
+        [8, 2],
+        [-textW - 8, -textH - 2],
+        [-textW - 8, 2],
+        [0, -textH - 6],
+        [0, 6],
+      ];
+
+      for (const [dx, dy] of candidates) {
+        const x = Math.max(canvasPadding, Math.min(anchorX + dx, W - textW - canvasPadding));
+        const y = Math.max(canvasPadding, Math.min(anchorY + dy, H - textH - canvasPadding));
+        const rect = { x, y, w: textW, h: textH };
+        if (!occupiedLabelRects.some((r0) => overlaps(rect, r0))) {
+          occupiedLabelRects.push(rect);
+          ctx.fillText(text, x, y);
+          return;
+        }
+      }
+
+      const fallbackX = Math.max(canvasPadding, Math.min(anchorX + 8, W - textW - canvasPadding));
+      const fallbackY = Math.max(canvasPadding, Math.min(anchorY + 2, H - textH - canvasPadding));
+      occupiedLabelRects.push({ x: fallbackX, y: fallbackY, w: textW, h: textH });
+      ctx.fillText(text, fallbackX, fallbackY);
+    };
 
     // 背景
     ctx.fillStyle = '#000d1a';
@@ -187,10 +228,7 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
       ctx.fill();
 
       if (showLabels && star.nameJa && star.mag < 1.5) {
-        ctx.font = '10px sans-serif';
-        ctx.fillStyle = 'rgba(200,220,255,0.8)';
-        ctx.textAlign = 'left';
-        ctx.fillText(star.nameJa, x + sr + 2, y - 2);
+        pendingObjectLabels.push({ text: star.nameJa, x: x + sr, y, color: 'rgba(200,220,255,0.8)' });
       }
     }
 
@@ -218,10 +256,7 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
         ctx.fill();
 
         if (showLabels) {
-          ctx.font = '10px sans-serif';
-          ctx.fillStyle = p.color;
-          ctx.textAlign = 'left';
-          ctx.fillText(p.nameJa, x + sr + 2, y - 2);
+          pendingObjectLabels.push({ text: p.nameJa, x: x + sr, y, color: p.color });
         }
       }
     }
@@ -319,15 +354,16 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
         }
 
         if (showLabels) {
-          ctx.font = '10px sans-serif';
-          ctx.fillStyle = '#ddd8b8';
-          ctx.textAlign = 'left';
-          ctx.fillText(`月 (${moon.phaseName})`, x + mr + 2, y - 2);
+          pendingObjectLabels.push({ text: `月 (${moon.phaseName})`, x: x + mr, y, color: '#ddd8b8' });
         }
       }
     }
 
     ctx.restore();
+
+    for (const label of pendingObjectLabels) {
+      placeObjectLabel(label.text, label.x, label.y, label.color);
+    }
 
     // 方位ラベル (円の外側、クリップ解除後に描画)
     ctx.font = 'bold 16px sans-serif';
@@ -336,6 +372,8 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
       const azR = (d.az * Math.PI) / 180;
       const ix = cx + (r + 20) * Math.sin(azR);
       const iy = cy - (r + 20) * Math.cos(azR);
+      const textW = ctx.measureText(d.label).width;
+      const textH = 16;
       // 'top' for 北 (top edge), 'bottom' for 南 (bottom edge), 'middle' otherwise
       if (d.az === 0) {
         ctx.textBaseline = 'top';
@@ -345,7 +383,9 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
         ctx.textBaseline = 'middle';
       }
       ctx.fillStyle = d.color;
-      ctx.fillText(d.label, ix, iy);
+      const clampedX = Math.max(canvasPadding + textW / 2, Math.min(ix, W - canvasPadding - textW / 2));
+      const clampedY = Math.max(canvasPadding + textH / 2, Math.min(iy, H - canvasPadding - textH / 2));
+      ctx.fillText(d.label, clampedX, clampedY);
     }
 
     // 地平線ラベル (南ラベルの下に少し余白を取る)
