@@ -193,6 +193,32 @@ function planetElements(jd: number): PlanetInfo[] {
   const eps = 23.439291 - 0.013004 * T;
   const epsR = eps * toR;
 
+  function norm(deg: number): number { return ((deg % 360) + 360) % 360; }
+
+  // 離心近点角をケプラー方程式から解く (反復)
+  function solveKepler(M: number, e: number): number {
+    let E = M;
+    for (let i = 0; i < 10; i++) E = M + e * Math.sin(E);
+    return E;
+  }
+
+  // 軌道要素から黄道直交座標 (AU) を返す
+  // a:長半径, e:離心率, i:軌道傾斜角, omega:近点引数, Omega:昇交点黄経, M:平均近点角 (すべて度)
+  function orbitToEclipticXY(a: number, e: number, i: number, omega: number, Omega: number, M: number): [number, number, number] {
+    const Mr = norm(M) * toR;
+    const E = solveKepler(Mr, e);
+    const xOrbit = a * (Math.cos(E) - e);
+    const yOrbit = a * Math.sqrt(1 - e * e) * Math.sin(E);
+    const iR = i * toR, omR = omega * toR, OmR = Omega * toR;
+    const cosOm = Math.cos(OmR), sinOm = Math.sin(OmR);
+    const cosI = Math.cos(iR), sinI = Math.sin(iR);
+    const cosom = Math.cos(omR), sinom = Math.sin(omR);
+    const x = (cosOm * cosom - sinOm * sinom * cosI) * xOrbit + (-cosOm * sinom - sinOm * cosom * cosI) * yOrbit;
+    const y = (sinOm * cosom + cosOm * sinom * cosI) * xOrbit + (-sinOm * sinom + cosOm * cosom * cosI) * yOrbit;
+    const z = (sinI * sinom) * xOrbit + (sinI * cosom) * yOrbit;
+    return [x, y, z];
+  }
+
   function eclipticToRaDec(lon: number, lat: number): { ra: number; dec: number } {
     const lonR = lon * toR;
     const latR = lat * toR;
@@ -201,18 +227,77 @@ function planetElements(jd: number): PlanetInfo[] {
     return { ra, dec };
   }
 
-  // 各惑星の軌道要素（簡易値）
-  const planets: { name: string; nameJa: string; L: number; dL: number; mag: number; color: string }[] = [
-    { name: 'Mercury', nameJa: '水星', L: 252.251 + 149474.074 * T, dL: 0, mag: -0.5, color: '#aaa' },
-    { name: 'Venus', nameJa: '金星', L: 181.98 + 58519.213 * T, dL: 0, mag: -4.0, color: '#ffe8a0' },
-    { name: 'Mars', nameJa: '火星', L: 355.433 + 19141.696 * T, dL: 0, mag: -1.5, color: '#ff6040' },
-    { name: 'Jupiter', nameJa: '木星', L: 34.396 + 3036.301 * T, dL: 0, mag: -2.5, color: '#e8d0a0' },
-    { name: 'Saturn', nameJa: '土星', L: 50.077 + 1223.011 * T, dL: 0, mag: 0.5, color: '#d4b870' },
+  // 地球の黄道直交座標 (Meeus "Astronomical Algorithms" 表33.a)
+  const L0e = norm(100.464457 + 36000.76983 * T);
+  const Me = norm(357.52911 + 35999.05029 * T);
+  const Ce = (1.914602 - 0.004817 * T) * Math.sin(Me * toR) + 0.019993 * Math.sin(2 * Me * toR) + 0.000289 * Math.sin(3 * Me * toR);
+  const sunLon = norm(L0e + Ce); // 太陽の黄経
+  const re = 1.000001018 * (1 - 0.01671123 * 0.01671123) / (1 + 0.01671123 * Math.cos((norm(Me + Ce)) * toR));
+  const Ex = re * Math.cos(sunLon * toR + Math.PI);
+  const Ey = re * Math.sin(sunLon * toR + Math.PI);
+  const Ez = 0;
+
+  // 軌道要素 (Meeus 表33.a / Jean Meeus "Astronomical Algorithms" 2nd ed.)
+  // a, e, i, omega(近点引数), Omega(昇交点黄経), L(平均黄経) ← M = L - (omega+Omega)
+  type OrbEl = { name: string; nameJa: string; a: number; e: number; i: number; omega: number; Omega: number; L: number; mag: number; color: string };
+  const planetDefs: OrbEl[] = [
+    {
+      name: 'Mercury', nameJa: '水星',
+      a: 0.387098, e: 0.20563 - 0.000021 * T,
+      i: norm(7.004979 - 0.0023 * T),
+      omega: norm(29.12478 + 0.1 * T),
+      Omega: norm(48.33076 - 0.12534 * T),
+      L: norm(252.25084 + 149472.67411 * T),
+      mag: -0.5, color: '#aaa',
+    },
+    {
+      name: 'Venus', nameJa: '金星',
+      a: 0.723330, e: 0.00677 - 0.000048 * T,
+      i: norm(3.394662 + 0.0 * T),
+      omega: norm(54.85229 + 0.5 * T),
+      Omega: norm(76.67992 - 0.27797 * T),
+      L: norm(181.97973 + 58517.81560 * T),
+      mag: -4.0, color: '#ffe8a0',
+    },
+    {
+      name: 'Mars', nameJa: '火星',
+      a: 1.523679, e: 0.09340 + 0.000091 * T,
+      i: norm(1.849736 - 0.0006 * T),
+      omega: norm(286.46230 + 0.4 * T),
+      Omega: norm(49.55953 - 0.29257 * T),
+      L: norm(355.43327 + 19140.29934 * T),
+      mag: 0.5, color: '#ff6040',
+    },
+    {
+      name: 'Jupiter', nameJa: '木星',
+      a: 5.202603, e: 0.04849 - 0.000286 * T,
+      i: norm(1.303267 - 0.0019 * T),
+      omega: norm(274.33479 + 0.32 * T),
+      Omega: norm(100.47390 + 0.13966 * T),
+      L: norm(34.39644 + 3034.90567 * T),
+      mag: -2.5, color: '#e8d0a0',
+    },
+    {
+      name: 'Saturn', nameJa: '土星',
+      a: 9.554909, e: 0.05551 - 0.000346 * T,
+      i: norm(2.488879 + 0.0 * T),
+      omega: norm(338.71690 + 0.38 * T),
+      Omega: norm(113.66242 - 0.25015 * T),
+      L: norm(50.07747 + 1222.11379 * T),
+      mag: 0.5, color: '#d4b870',
+    },
   ];
 
-  return planets.map((p) => {
-    const lon = ((p.L % 360) + 360) % 360;
-    const { ra, dec } = eclipticToRaDec(lon, 0);
+  return planetDefs.map((p) => {
+    const M = norm(p.L - p.omega - p.Omega);
+    const [px, py, pz] = orbitToEclipticXY(p.a, p.e, p.i, p.omega, p.Omega, M);
+    // 地心黄道直交座標
+    const dx = px - Ex;
+    const dy = py - Ey;
+    const dz = pz - Ez;
+    const geoLon = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+    const geoLat = (Math.atan2(dz, Math.sqrt(dx * dx + dy * dy)) * 180) / Math.PI;
+    const { ra, dec } = eclipticToRaDec(geoLon, geoLat);
     return { name: p.name, nameJa: p.nameJa, ra, dec, mag: p.mag, color: p.color };
   });
 }
@@ -282,6 +367,8 @@ export const STARS: Star[] = [
   { name: 'Altair', nameJa: 'アルタイル', ra: 297.696, dec: 8.868, mag: 0.77 },
   // こと座
   { name: 'Vega', nameJa: 'ベガ', ra: 279.234, dec: 38.783, mag: 0.03 },
+  { name: 'Sheliak', ra: 282.520, dec: 33.363, mag: 3.52 },
+  { name: 'Sulafat', ra: 284.736, dec: 32.690, mag: 3.24 },
   // はくちょう座
   { name: 'Deneb', nameJa: 'デネブ', ra: 310.358, dec: 45.280, mag: 1.25 },
   { name: 'Sadr', ra: 305.557, dec: 40.257, mag: 2.23 },
@@ -443,9 +530,9 @@ export const CONSTELLATIONS: ConstellationLine[] = [
     stars: STARS,
     lines: [
       [starIndex('Deneb'), starIndex('Sadr')],
-      [starIndex('Sadr'), starIndex('Altair')],
       [starIndex('Sadr'), starIndex('Gienah Cyg')],
       [starIndex('Sadr'), starIndex('Delta Cyg')],
+      [starIndex('Delta Cyg'), starIndex('Deneb')],
     ],
   },
   {
@@ -475,7 +562,8 @@ export const CONSTELLATIONS: ConstellationLine[] = [
     nameJa: 'こと座',
     stars: STARS,
     lines: [
-      [starIndex('Vega'), starIndex('Alphecca')],
+      [starIndex('Vega'), starIndex('Sheliak')],
+      [starIndex('Sheliak'), starIndex('Sulafat')],
     ],
   },
   {
