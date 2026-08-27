@@ -145,6 +145,20 @@ export default function StarMapApp() {
         >
           🕐 現在時刻
         </button>
+
+        <button
+          onClick={() => {
+            const tonight = new Date();
+            tonight.setHours(21, 0, 0, 0);
+            setDatetime(formatDatetimeLocal(tonight));
+          }}
+          style={{
+            alignSelf: 'flex-end', background: '#1a3a5a', color: '#9be',
+            border: '1px solid #2a5a8a', borderRadius: 4, padding: '5px 10px', cursor: 'pointer', fontSize: 13,
+          }}
+        >
+          🌙 今晩の空
+        </button>
       </div>
 
       {/* 表示切替 */}
