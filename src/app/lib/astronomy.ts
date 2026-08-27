@@ -237,7 +237,7 @@ export interface ConstellationLine {
   stars: Star[];
 }
 
-// 明るい恒星 (等級 < 3.5 程度の代表的な星)
+// 明るい恒星 (等級 4 前後まで含む代表的な星)
 export const STARS: Star[] = [
   // おおいぬ座
   { name: 'Sirius', nameJa: 'シリウス', ra: 101.287, dec: -16.716, mag: -1.46 },
@@ -350,6 +350,25 @@ export const STARS: Star[] = [
   { name: 'Sadalsuud', ra: 322.890, dec: -5.571, mag: 2.91 },
   // うお座
   { name: 'Eta Psc', ra: 22.870, dec: 15.345, mag: 3.62 },
+  // 追加の明るい恒星（表示密度向上）
+  { name: 'Hamal', ra: 31.793, dec: 23.462, mag: 2.01 },
+  { name: 'Mirfak', ra: 51.080, dec: 49.861, mag: 1.79 },
+  { name: 'Algol', ra: 47.042, dec: 40.956, mag: 2.12 },
+  { name: 'Menkar', ra: 45.570, dec: 4.089, mag: 2.54 },
+  { name: 'Alhena', ra: 99.428, dec: 16.399, mag: 1.93 },
+  { name: 'Mirzam', ra: 95.675, dec: -17.956, mag: 1.98 },
+  { name: 'Wezen', ra: 107.097, dec: -26.393, mag: 1.83 },
+  { name: 'Naos', ra: 120.896, dec: -40.004, mag: 2.25 },
+  { name: 'Avior', ra: 125.628, dec: -59.509, mag: 1.86 },
+  { name: 'Alphard', ra: 141.897, dec: -8.658, mag: 1.98 },
+  { name: 'Diphda', ra: 10.897, dec: -17.986, mag: 2.04 },
+  { name: 'Izar', ra: 221.246, dec: 27.074, mag: 2.35 },
+  { name: 'Seginus', ra: 225.486, dec: 38.308, mag: 3.04 },
+  { name: 'Rasalgethi', ra: 258.662, dec: 14.390, mag: 3.48 },
+  { name: 'Enif', ra: 333.437, dec: 9.875, mag: 2.39 },
+  { name: 'Sadalmelik', ra: 331.446, dec: -0.320, mag: 2.95 },
+  { name: 'Atria', ra: 252.167, dec: -69.027, mag: 1.91 },
+  { name: 'Gacrux', ra: 187.791, dec: -57.113, mag: 1.59 },
 ];
 
 // 星座の定義 (STARS配列のインデックスで結ぶ線を定義)

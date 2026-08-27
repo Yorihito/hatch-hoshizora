@@ -35,7 +35,7 @@ function toCanvas(az: number, alt: number, cx: number, cy: number, r: number): [
 
 function magToRadius(mag: number): number {
   // 等級 → 半径 (明るいほど大きい)
-  return Math.max(0.5, 4.5 - mag * 0.8);
+  return Math.max(0.45, (4.5 - mag * 0.8) * 0.85);
 }
 
 export default function StarMap({ lat, lon, date, showConstellations, showPlanets, showMoon, showLabels }: Props) {
