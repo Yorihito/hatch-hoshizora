@@ -71,23 +71,35 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
 
     // 方位目盛り
     const dirs = [
-      { az: 0, label: '北' },
-      { az: 90, label: '東' },
-      { az: 180, label: '南' },
-      { az: 270, label: '西' },
+      { az: 0, label: '北', color: '#4af' },
+      { az: 90, label: '東', color: '#e0c060' },
+      { az: 180, label: '南', color: '#e0c060' },
+      { az: 270, label: '西', color: '#e0c060' },
     ];
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const d of dirs) {
-      // 目盛り線
+      // 方位線
       const pos = toCanvas(d.az, 0, cx, cy, r);
       if (pos) {
         const [x, y] = pos;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.lineTo(x, y);
-        ctx.strokeStyle = '#1a2535';
+        ctx.strokeStyle = 'rgba(80,120,160,0.25)';
         ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // 地平線上の目盛りマーク
+        const azR = (d.az * Math.PI) / 180;
+        const tickLen = 10;
+        const tx1 = cx + (r - tickLen) * Math.sin(azR);
+        const ty1 = cy - (r - tickLen) * Math.cos(azR);
+        ctx.beginPath();
+        ctx.moveTo(tx1, ty1);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = d.color;
+        ctx.lineWidth = 2;
         ctx.stroke();
       }
     }
@@ -321,11 +333,11 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#e0c060';
     for (const d of dirs) {
       const azR = (d.az * Math.PI) / 180;
       const ix = cx + (r + 20) * Math.sin(azR);
       const iy = cy - (r + 20) * Math.cos(azR);
+      ctx.fillStyle = d.color;
       ctx.fillText(d.label, ix, iy);
     }
 
