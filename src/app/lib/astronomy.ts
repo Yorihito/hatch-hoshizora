@@ -231,10 +231,10 @@ function planetElements(jd: number): PlanetInfo[] {
   const L0e = norm(100.464457 + 36000.76983 * T);
   const Me = norm(357.52911 + 35999.05029 * T);
   const Ce = (1.914602 - 0.004817 * T) * Math.sin(Me * toR) + 0.019993 * Math.sin(2 * Me * toR) + 0.000289 * Math.sin(3 * Me * toR);
-  const sunLon = norm(L0e + Ce); // 太陽の黄経
+  const earthLon = norm(L0e + Ce); // 地球の黄経 (太陽中心黄経)
   const re = 1.000001018 * (1 - 0.01671123 * 0.01671123) / (1 + 0.01671123 * Math.cos((norm(Me + Ce)) * toR));
-  const Ex = re * Math.cos(sunLon * toR + Math.PI);
-  const Ey = re * Math.sin(sunLon * toR + Math.PI);
+  const Ex = re * Math.cos(earthLon * toR);
+  const Ey = re * Math.sin(earthLon * toR);
   const Ez = 0;
 
   // 軌道要素 (Meeus 表33.a / Jean Meeus "Astronomical Algorithms" 2nd ed.)
