@@ -332,20 +332,28 @@ export default function StarMap({ lat, lon, date, showConstellations, showPlanet
     // 方位ラベル (円の外側、クリップ解除後に描画)
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
     for (const d of dirs) {
       const azR = (d.az * Math.PI) / 180;
       const ix = cx + (r + 20) * Math.sin(azR);
       const iy = cy - (r + 20) * Math.cos(azR);
+      // 'top' for 北 (top edge), 'bottom' for 南 (bottom edge), 'middle' otherwise
+      if (d.az === 0) {
+        ctx.textBaseline = 'top';
+      } else if (d.az === 180) {
+        ctx.textBaseline = 'bottom';
+      } else {
+        ctx.textBaseline = 'middle';
+      }
       ctx.fillStyle = d.color;
       ctx.fillText(d.label, ix, iy);
     }
 
-    // 地平線ラベル
+    // 地平線ラベル (南ラベルの下に少し余白を取る)
     ctx.font = '12px sans-serif';
-    ctx.fillStyle = '#334';
+    ctx.fillStyle = '#556';
     ctx.textAlign = 'center';
-    ctx.fillText('地平線', cx, cy + r + 14);
+    ctx.textBaseline = 'top';
+    ctx.fillText('地平線', cx, cy + r + 20);
   }, [lat, lon, date, showConstellations, showPlanets, showMoon, showLabels]);
 
   useEffect(() => {
