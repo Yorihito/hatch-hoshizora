@@ -1,0 +1,34 @@
+# Naedoko が配置。「直ったら、確認せずに公開する」を入にしているあいだだけ置かれます。
+# エージェントの Pull Request が仕上がったら、自動で取り込みます。
+# 切にすると Naedoko がこのファイルを消します。
+name: Naedoko Auto Publish
+
+# ⚠️ pull_request_target は使わない。fork からの Pull Request でも動いてしまい、
+# 誰でも公開リポジトリに変更を流し込めるようになる。
+on:
+  pull_request:
+    types: [opened, edited, synchronize, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  publish:
+    # 取り込む条件は2つ。
+    #  - タイトルに [WIP] が残っていない (まだ作業中ではない)
+    #  - このリポジトリのブランチから出ている (fork ではない)
+    #    ブランチを作れるのは書き込み権限のある人だけなので、これが歯止めになる。
+    if: >-
+      ${{ !startsWith(github.event.pull_request.title, '[WIP]')
+      && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取り込む
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # draft のままではマージできない
+          gh pr ready "$PR" --repo "$GITHUB_REPOSITORY" || true
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash
